@@ -22,6 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: msys2/setup-msys2@v2
+        id: msys2
         with:
           msystem: CLANG64
           update: true
@@ -47,13 +48,17 @@ jobs:
             mingw-w64-clang-x86_64-spirv-cross
       - name: Build
         shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
         run: |
-          $env:PATH = "C:\msys64\clang64\bin;$env:PATH"
+          $env:PATH = "$env:MSYS2_ROOT\clang64\bin;$env:PATH"
           .\tools\build.ps1
       - name: Test
         shell: pwsh
+        env:
+          MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
         run: |
-          $env:PATH = "C:\msys64\clang64\bin;$env:PATH"
+          $env:PATH = "$env:MSYS2_ROOT\clang64\bin;$env:PATH"
           $build = 'build\cmake\clang64'
           ninja -C $build dcp-launcher-tests dcp-update-tests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
