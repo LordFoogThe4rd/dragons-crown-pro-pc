@@ -50,6 +50,9 @@ jobs:
         shell: pwsh
         env:
           MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+          # Sirit (gpu/third_party) calls std::abort without including <cstdlib>; the rolling MSYS2 clang (23) rejects
+          # that. Drop this once the dependency is patched.
+          CXXFLAGS: -include cstdlib
         run: |
           $env:PATH = "$env:MSYS2_ROOT\clang64\bin;$env:PATH"
           .\tools\build.ps1
