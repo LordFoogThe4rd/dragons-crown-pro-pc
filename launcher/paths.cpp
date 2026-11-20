@@ -75,6 +75,7 @@ Paths ResolvePaths(const PathRequest& request, const fs::path& exe_dir) {
     paths.app0 = OrDefault(request.app0, active.app0);
     paths.user_dir = OrDefault(request.user_dir, defaults.user_dir);
     paths.logs_dir = OrDefault(request.logs_dir, defaults.logs_dir);
+    paths.prepared_dir = defaults.roots.prepared;
     return paths;
 }
 
@@ -171,5 +172,6 @@ extern "C" int dcp_resolve_paths(const DcpPathRequest* request, DcpPaths* out) {
     }
     return dcp::Copy(out->boot, paths.boot) && dcp::Copy(out->content_profile, paths.content_profile) &&
            dcp::Copy(out->app0, paths.app0) && dcp::Copy(out->image_dir, paths.image_dir) &&
-           dcp::Copy(out->user_dir, paths.user_dir) && dcp::Copy(out->logs_dir, paths.logs_dir);
+           dcp::Copy(out->user_dir, paths.user_dir) && dcp::Copy(out->logs_dir, paths.logs_dir) &&
+           dcp::Copy(out->prepared_dir, paths.prepared_dir);
 }

@@ -291,6 +291,43 @@ GamePaths BuildPaths(const GameRoots& roots, const GameBuild& build) {
     return {roots.prepared / build.folder, roots.image / build.folder};
 }
 
+namespace {
+
+bool ReadInPlaceFolder(const std::filesystem::path& image_dir, std::filesystem::path& folder) {
+    std::string text;
+    if (!ReadSmallFile(image_dir / kInPlaceRecord, text)) {
+        return false;
+    }
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
+        text.pop_back();
+    }
+    if (text.empty()) {
+        return false;
+    }
+    folder = PathFromUtf8(text);
+    return true;
+}
+
+} // namespace
+
+std::optional<GamePaths> InPlacePaths(const GameRoots& roots, std::span<const GameBuild> builds) {
+    for (const GameBuild& build : builds) {
+        const GamePaths paths = BuildPaths(roots, build);
+        std::filesystem::path folder;
+        if (ReadInPlaceFolder(paths.image_dir, folder)) {
+            return GamePaths{folder, paths.image_dir};
+        }
+    }
+    return std::nullopt;
+}
+
+void ClearInPlaceRecords(const GameRoots& roots, std::span<const GameBuild> builds) {
+    for (const GameBuild& build : builds) {
+        std::error_code ec;
+        std::filesystem::remove(BuildPaths(roots, build).image_dir / kInPlaceRecord, ec);
+    }
+}
+
 const GameBuild* LastPreparedBuild(const GameRoots& roots, std::span<const GameBuild> builds) {
     const GameBuild* chosen = nullptr;
     std::filesystem::file_time_type chosen_time;
@@ -310,6 +347,9 @@ const GameBuild* LastPreparedBuild(const GameRoots& roots, std::span<const GameB
 }
 
 GamePaths ActiveBuildPaths(const GameRoots& roots, std::span<const GameBuild> builds) {
+    if (std::optional<GamePaths> in_place = InPlacePaths(roots, builds)) {
+        return *in_place;
+    }
     const GameBuild* last = LastPreparedBuild(roots, builds);
     return BuildPaths(roots, last ? *last : builds[0]);
 }
@@ -448,20 +488,23 @@ GameCheck CheckGameFiles(const GamePaths& paths, std::span<const GameBuild> buil
     }
 
     const std::filesystem::path marker_file = paths.app0 / kPreparedMarker;
-    if (!std::filesystem::exists(marker_file, ec)) {
-        return Result(GameFileState::kMissing, "game folder has no preparation marker");
-    }
     std::string marker;
-    if (!ReadSmallFile(marker_file, marker)) {
-        return Result(GameFileState::kReadError, "cannot read the preparation marker");
-    }
-    const std::string version = JsonString(marker, "version");
-    const std::string scope = JsonString(marker, "scope");
-    if (version.empty() || scope.empty()) {
-        return Result(GameFileState::kMissing, "game preparation did not finish");
-    }
-    if (scope != "full") {
-        return Result(GameFileState::kMissing, "only the " + scope + " files were prepared");
+    std::filesystem::path in_place;
+    const bool prepared = std::filesystem::exists(marker_file, ec);
+    if (prepared) {
+        if (!ReadSmallFile(marker_file, marker)) {
+            return Result(GameFileState::kReadError, "cannot read the preparation marker");
+        }
+        const std::string version = JsonString(marker, "version");
+        const std::string scope = JsonString(marker, "scope");
+        if (version.empty() || scope.empty()) {
+            return Result(GameFileState::kMissing, "game preparation did not finish");
+        }
+        if (scope != "full") {
+            return Result(GameFileState::kMissing, "only the " + scope + " files were prepared");
+        }
+    } else if (!ReadInPlaceFolder(paths.image_dir, in_place) || in_place != paths.app0) {
+        return Result(GameFileState::kMissing, "game folder has no preparation marker");
     }
 
     const GameCheck tree = CheckGameTree(paths.app0, builds);
@@ -470,8 +513,11 @@ GameCheck CheckGameFiles(const GamePaths& paths, std::span<const GameBuild> buil
     }
     const GameBuild& build = *tree.build;
     const std::string& sha = tree.eboot_sha256;
-    if (version != build.version && !MigrateLegacyMarker(marker_file, marker, build, version)) {
-        return Result(GameFileState::kDifferentVersion, "prepared version " + version, sha, &build);
+    if (prepared) {
+        const std::string version = JsonString(marker, "version");
+        if (version != build.version && !MigrateLegacyMarker(marker_file, marker, build, version)) {
+            return Result(GameFileState::kDifferentVersion, "prepared version " + version, sha, &build);
+        }
     }
     for (const char* name : kImageFiles) {
         if (!IsRegularNonEmpty(paths.image_dir / name)) {

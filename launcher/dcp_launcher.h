@@ -30,6 +30,7 @@ typedef struct {
     DcpGraphicsCheck check_graphics; /* NULL: Play does not check; see dcp_check_vulkan */
     int game_process;          /* Windows: with Allow overlay programs on, Play starts the game as a process of its own */
     const char *log_file;      /* this run's log, continued by the game process; NULL when there is none */
+    const char *prepared_dir;  /* where the installer writes the game; NULL: app0's parent */
 } DcpLauncherConfig;
 
 /* NULL asks for the default, which is relative to the executable (launcher/paths.h). */
@@ -48,6 +49,7 @@ typedef struct {
     char image_dir[4096];
     char user_dir[4096];
     char logs_dir[4096];
+    char prepared_dir[4096]; /* where the installer writes the game; app0 may be a folder the player selected */
     char error[512]; /* why the paths cannot be used, when it is known (DCP_GAME_BUILD) */
 } DcpPaths;
 

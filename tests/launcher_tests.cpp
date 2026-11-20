@@ -772,7 +772,9 @@ void TestInstaller(const fs::path& base) {
 
     const GameRoots foreign{base / "install-foreign" / "prepared", base / "install-foreign" / "image"};
     WriteAll(BuildPaths(foreign, kUs).app0 / "notes.txt", "mine");
-    CHECK(install(source.paths.app0, foreign) == InstallStatus::kForeignFolder);
+    // A folder is played where it is, so a folder of the port's own is not a destination to check; its boot image still
+    // cannot be built from this synthetic executable.
+    CHECK(install(source.paths.app0, foreign) == InstallStatus::kPrepareFailed);
     CHECK(ReadAll(BuildPaths(foreign, kUs).app0 / "notes.txt") == "mine");
 
     const auto sfo_with = [](const char* title_id, const char* app_ver) {
@@ -8298,6 +8300,46 @@ void TestLegacyMarker(const fs::path& base) {
     }
 }
 
+// A game folder is played where it is: its build's image folder records it, and the readiness check and the active build
+// follow that record. The folder itself carries no marker and is never written.
+void TestInPlaceInstall(const fs::path& base) {
+    const fs::path root = base / "in-place";
+    fs::remove_all(root);
+    const GameRoots roots{root / "prepared", root / "image"};
+    Fixture folder(root, "folder", kUs);
+    fs::remove(folder.paths.app0 / kPreparedMarker);
+    const GamePaths installed = BuildPaths(roots, folder.build);
+    const std::string record = Utf8(folder.paths.app0) + "\n";
+    WriteAll(installed.image_dir / kInPlaceRecord, record);
+    WriteAll(installed.image_dir / "boot.bin", "boot");
+    WriteAll(installed.image_dir / "content.bin", "content");
+    WriteAll(installed.image_dir / "image.json",
+             "{\n  \"title_id\": \"" + std::string(folder.build.title_id) + "\",\n  \"eboot_sha256\": \"" +
+                 folder.eboot_sha + "\"\n}");
+
+    CHECK(CheckGameFiles({folder.paths.app0, installed.image_dir}, folder.builds).state == GameFileState::kValid);
+    CHECK(ActiveBuildPaths(roots, folder.builds).app0 == folder.paths.app0);
+    CHECK(ActiveBuildPaths(roots, folder.builds).image_dir == installed.image_dir);
+
+    // A record for another folder does not make this one ready.
+    WriteAll(installed.image_dir / kInPlaceRecord, Utf8(root / "elsewhere") + "\n");
+    CHECK(CheckGameFiles({folder.paths.app0, installed.image_dir}, folder.builds).state == GameFileState::kMissing);
+    WriteAll(installed.image_dir / kInPlaceRecord, record);
+
+    // Installing from the folder fails here (its eboot.bin is not a real executable), and that leaves both the folder and
+    // the record as they were.
+    const std::string eboot = ReadAll(folder.paths.app0 / "eboot.bin");
+    CHECK(InstallGame(folder.paths.app0, roots, {}, folder.builds).status == InstallStatus::kPrepareFailed);
+    CHECK(ReadAll(folder.paths.app0 / "eboot.bin") == eboot);
+    CHECK(!fs::exists(folder.paths.app0 / kPreparedMarker));
+    CHECK(ReadAll(installed.image_dir / kInPlaceRecord) == record);
+    CHECK(!fs::exists(BuildPaths(roots, folder.build).app0));
+
+    ClearInPlaceRecords(roots, folder.builds);
+    CHECK(!fs::exists(installed.image_dir / kInPlaceRecord));
+    CHECK(ActiveBuildPaths(roots, folder.builds).app0 == BuildPaths(roots, folder.build).app0);
+}
+
 // What the About page names the installed game: each complete build by its own label, and nothing when no supported
 // build is complete. The active build is the complete game prepared last.
 void TestInstalledGameName(const fs::path& base) {
@@ -9170,6 +9212,7 @@ int main(int argc, char** argv) {
     TestEuropeBuild(base);
     TestLegacyMarker(base);
     TestInstalledGameName(base);
+    TestInPlaceInstall(base);
     TestLauncherLocalization();
     TestFileDialogLabel();
     TestTextWithValues();

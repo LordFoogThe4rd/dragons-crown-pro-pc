@@ -36,12 +36,21 @@ struct GameCheck {
     size_t layer = 0;                 // for a package: its index in build->layers
 };
 
+// Written into a build's image folder when the game is played from a folder the player selected instead of a prepared
+// copy: the folder's path. It is the only marker of such an installation; nothing is written into the game folder.
+inline constexpr char kInPlaceRecord[] = "app0.txt";
+
 // The "scope" of a folder's preparation marker: "full", "core" (development) or empty.
 std::string PreparationScope(const std::filesystem::path& app0);
 GamePaths BuildPaths(const GameRoots& roots, const GameBuild& build);
+// The build played from a player-selected folder, with its boot image folder, or nothing.
+std::optional<GamePaths> InPlacePaths(const GameRoots& roots, std::span<const GameBuild> builds = SupportedBuilds());
+// Forgets every player-selected folder: an installation of the port's own replaced them.
+void ClearInPlaceRecords(const GameRoots& roots, std::span<const GameBuild> builds = SupportedBuilds());
 // The build whose complete folder was prepared last, or nullptr when no supported build is complete.
 const GameBuild* LastPreparedBuild(const GameRoots& roots, std::span<const GameBuild> builds = SupportedBuilds());
-// The folders of the installed build: the complete game that was prepared last, else the first build's.
+// The folders of the installed build: the folder the player selected for an in-place installation, else the complete
+// game that was prepared last, else the first build's.
 GamePaths ActiveBuildPaths(const GameRoots& roots, std::span<const GameBuild> builds = SupportedBuilds());
 GameRoots RootsOf(const GamePaths& paths);
 

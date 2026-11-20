@@ -719,7 +719,7 @@ int main(int argc, char **argv) {
         check_graphics=system_usable;
 #endif
         DcpLauncherConfig launcher={app0,paths.image_dir,user_dir,settings_file,log_folder,skip_launcher,force_launcher,check_graphics,
-                                    game_process,log_started ? log_path : NULL};
+                                    game_process,log_started ? log_path : NULL,paths.prepared_dir};
         dcp_startup_phase("launcher handoff");
         DcpLauncherResult launched=dcp_launcher_run(&launcher);
         dcp_startup_phase("launcher returned");

@@ -95,7 +95,7 @@ Install a supported build from your own .pkg file or an extracted game folder.	I
 Check that the game folder can be read, then install again.	Verifique se a pasta do jogo pode ser lida e instale novamente.
 Game files	Arquivos do jogo
 Select your own legally obtained Dragon's Crown Pro package (.pkg) or an already extracted game folder. Supported:\s	Selecione o seu próprio pacote de Dragon's Crown Pro obtido legalmente (.pkg) ou uma pasta de jogo já extraída. Compatível com:\s
-. The USA 1.01, Japanese 1.02 and 1.03 and Asia/Hong Kong 1.02 updates are installed over their respective 1.00 base packages. The game is unpacked into the game folder next to the program (about 6 GB). The game itself is not included. Reinstalling keeps your saves and settings.	. As atualizações 1.01 dos EUA, 1.02 e 1.03 do Japão e 1.02 da Ásia/Hong Kong são instaladas sobre os respectivos pacotes base 1.00. O jogo é descompactado na pasta de jogo ao lado do programa (cerca de 6 GB). O jogo em si não está incluído. Reinstalar mantém seus jogos salvos e configurações.
+. The USA 1.01, Japanese 1.02 and 1.03 and Asia/Hong Kong 1.02 updates are installed over their respective 1.00 base packages. A package is unpacked into the game folder next to the program (about 6 GB); an extracted folder is played from where it is, so keep it. The game itself is not included. Reinstalling keeps your saves and settings.	. As atualizações 1.01 dos EUA, 1.02 e 1.03 do Japão e 1.02 da Ásia/Hong Kong são instaladas sobre os respectivos pacotes base 1.00. Um pacote é descompactado na pasta de jogo ao lado do programa (cerca de 6 GB); uma pasta extraída é jogada de onde está, então mantenha-a. O jogo em si não está incluído. Reinstalar mantém seus jogos salvos e configurações.
 The game files are not ready: see the Play page.	Os arquivos do jogo não estão prontos: veja a página Jogar.
 Wait for the installation to finish.	Aguarde a instalação terminar.
 Wait for the game file changes to finish.	Aguarde as alterações dos arquivos do jogo terminarem.
@@ -338,7 +338,7 @@ Comms Wheel	Roda de comunicação
 This open source PC port is maintained and developed in my free time. If you enjoy the project and would like to support its continued development, you can sponsor my work on GitHub.	Este port para PC de código aberto é mantido e desenvolvido no meu tempo livre. Se você gosta do projeto e quer apoiar seu desenvolvimento contínuo, pode patrocinar meu trabalho pelo GitHub.
 Support is completely optional and helps support ongoing improvements and future projects.	O apoio é totalmente opcional e ajuda no desenvolvimento de melhorias e novos projetos.
 Dragon's Crown Pro for PlayStation 4, running natively on this PC. The game itself is not included; it runs from the user's own copy.	Dragon's Crown Pro para PlayStation 4, rodando nativamente neste PC. O jogo em si não está incluído; ele roda a partir da cópia do próprio usuário.
-Where the prepared game is read from.	De onde o jogo preparado é lido.
+Where the game is read from.	De onde o jogo é lido.
 Open game folder	Abrir pasta do jogo
 Saves and settings	Jogos salvos e configurações
 Settings, saves and caches.	Configurações, jogos salvos e caches.
@@ -398,7 +398,7 @@ This port supports\s	Este port é compatível com\s
 The package is incomplete or some of the game's files are missing. Copy or download it again.	O pacote está incompleto ou faltam alguns arquivos do jogo. Copie ou baixe novamente.
 The package could not be read or is damaged. Check the file, then try again.	Não foi possível ler o pacote ou ele está danificado. Verifique o arquivo e tente novamente.
 Choose another file	Escolha outro arquivo
-Select your game package, not a file inside the port's own game folder.	Selecione o pacote do jogo, não um arquivo dentro da pasta de jogo do próprio port.
+Select your game package or extracted folder, not one inside the port's own game folder.	Selecione o pacote do jogo ou a pasta extraída, não um deles dentro da pasta de jogo do próprio port.
 Could not install the game	Não foi possível instalar o jogo
 The port's game folder holds other files. Move them out and try again.	A pasta de jogo do port contém outros arquivos. Mova-os para fora e tente novamente.
 Not enough free space	Espaço em disco insuficiente

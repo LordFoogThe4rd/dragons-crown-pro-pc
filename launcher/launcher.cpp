@@ -100,8 +100,9 @@ std::string GameFilesHelp() {
               "Supported: ") +
            SupportedBuildsText() +
            Tr(". The USA 1.01, Japanese 1.02 and 1.03 and Asia/Hong Kong 1.02 updates are installed over their "
-              "respective 1.00 base packages. The game is unpacked into the game folder next to the program (about 6 "
-              "GB). The game itself is not included. Reinstalling keeps your saves and settings.");
+              "respective 1.00 base packages. A package is unpacked into the game folder next to the program (about 6 "
+              "GB); an extracted folder is played from where it is, so keep it. The game itself is not included. "
+              "Reinstalling keeps your saves and settings.");
 }
 #ifdef _WIN32
 constexpr char kShowLauncherHelp[] = "Off starts the game directly. Hold Shift while starting to bring it back.";
@@ -336,6 +337,13 @@ bool SeparateGameProcess(const DcpLauncherConfig& config, const LauncherSettings
     return config.game_process && SeparateGameProcessWanted(settings.GetBool(kAllowOverlayProgramsKey, false));
 }
 
+// The folders the installer writes, even while the game is played from a folder the player selected.
+GameRoots InstallRoots(const DcpLauncherConfig& config, const GamePaths& paths) {
+    const std::filesystem::path prepared = config.prepared_dir && *config.prepared_dir ? PathFromUtf8(config.prepared_dir)
+                                                                                      : paths.app0.parent_path();
+    return {prepared, paths.image_dir.parent_path()};
+}
+
 // The saved settings are final here: the game process reads them from the same file.
 bool StartGameProcess(const DcpLauncherConfig& config, std::string& error) {
     Log("starting overlay-compatible game process");
@@ -354,7 +362,7 @@ class LauncherApp {
 public:
     LauncherApp(const DcpLauncherConfig& config, LauncherSettings& settings, GamePaths paths, GameCheck check)
         : config_(config), settings_(settings), paths_(std::move(paths)), files_(check.state), build_(check.build),
-          text_languages_(InstalledTextLanguages(paths_.app0, build_)) {}
+          roots_(InstallRoots(config, paths_)), text_languages_(InstalledTextLanguages(paths_.app0, build_)) {}
 
     bool game_process_started() const { return game_process_started_; }
 
@@ -871,11 +879,11 @@ private:
             return;
         }
         if (folder) {
-            browser_.OpenForFolder(paths_.app0.parent_path().parent_path().parent_path());
+            browser_.OpenForFolder(roots_.prepared.parent_path());
             return;
         }
         if (UseBuiltInChooser()) {
-            browser_.Open(paths_.app0.parent_path().parent_path().parent_path());
+            browser_.Open(roots_.prepared.parent_path());
             return;
         }
         StartInstall(trg::BrowseForFile(Tr("Select your Dragon's Crown Pro package"),
@@ -902,7 +910,7 @@ private:
         outcome_ = std::make_shared<InstallResult>();
         const bool started = install_.Start(
             "Checking the package...",
-            [outcome = outcome_, source = PathFromUtf8(picked), roots = RootsOf(paths_),
+            [outcome = outcome_, source = PathFromUtf8(picked), roots = roots_,
              replace = files_ == GameFileState::kValid](trg::Task& task) {
                 InstallHooks hooks;
                 hooks.replace_active = replace;
@@ -940,6 +948,9 @@ private:
             } else {
                 Log("game installed: %zu files (%zu linked), %llu bytes", outcome->files, outcome->linked,
                     static_cast<unsigned long long>(outcome->bytes));
+                if (!outcome->detail.empty()) {
+                    Log("game played from %s", outcome->detail.c_str());
+                }
                 for (const std::string& line : outcome->language_report) {
                     Log("language resources, %s", line.c_str());
                 }
@@ -947,7 +958,7 @@ private:
             for (const std::string& line : outcome->site_report) {
                 std::printf("%s\n", line.c_str());
             }
-            paths_ = ActiveBuildPaths(RootsOf(paths_));
+            paths_ = ActiveBuildPaths(roots_);
             Recheck();
             if (trophy_page_) {
                 trophy_page_->Invalidate();
@@ -1525,7 +1536,7 @@ private:
         ui.Spacer(4);
         std::error_code ec;
         if (std::filesystem::is_directory(paths_.app0, ec)) {
-            ui.FolderRow("Game files", "Where the prepared game is read from.", "Open game folder", Utf8(paths_.app0));
+            ui.FolderRow("Game files", "Where the game is read from.", "Open game folder", Utf8(paths_.app0));
         }
         const std::filesystem::path user = PathFromUtf8(config_.user_dir ? config_.user_dir : "user");
         std::filesystem::create_directories(user, ec);
@@ -1588,6 +1599,8 @@ private:
     const DcpLauncherConfig& config_;
     LauncherSettings& settings_;
     GamePaths paths_;
+    // Where the installer writes: unchanged by a game folder the player selected, which app0's parent does not name.
+    GameRoots roots_;
     GameFileState files_;
     const GameBuild* build_ = nullptr;
     std::vector<TextLanguage> text_languages_;

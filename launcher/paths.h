@@ -21,6 +21,7 @@ struct Paths {
     std::filesystem::path image_dir;
     std::filesystem::path user_dir;
     std::filesystem::path logs_dir;
+    std::filesystem::path prepared_dir; // where the installer writes the game; not derived from app0, which may be a player's folder
     std::string error; // set when DCP_GAME_BUILD names a build that cannot be used; the paths are then not usable
 };
 

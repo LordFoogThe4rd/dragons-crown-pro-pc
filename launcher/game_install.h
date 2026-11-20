@@ -1,6 +1,7 @@
-// Installs the game from the player's own fake PKG (or an already extracted game folder): checks it, unpacks or lays
-// it out in staging folders next to the prepared game, builds the boot image, checks the result and only then swaps it
-// in. Settings, saves, logs and the shader cache live elsewhere and are never touched.
+// Installs the game from the player's own fake PKG, or plays an already extracted game folder where it is: the package is
+// unpacked and laid out in staging folders next to the prepared game, while a folder only gets a boot image built from it
+// in the port's image folder. A package is checked, built, checked again and only then swapped in; nothing in the game
+// folder is copied, changed or removed. Settings, saves, logs and the shader cache live elsewhere and are never touched.
 #pragma once
 
 #include <cstdint>
@@ -56,9 +57,10 @@ struct InstallHooks {
     bool replace_active = false; // install the package even when its build is the active, ready one
 };
 
-// The build is the one the source identifies as; it is installed into BuildPaths(roots, build). An update is laid over the
-// installed base build of its title (kUpdateNeedsBase when that is not installed). On any failure or cancellation that
-// build's current installation is left as it was. The source is a .pkg file or a game folder.
+// The build is the one the source identifies as. A package is installed into BuildPaths(roots, build); an update is laid
+// over the installed base build of its title (kUpdateNeedsBase when that is not installed). On any failure or cancellation
+// that build's current installation is left as it was. A game folder is played where it is: only its boot image is built
+// and recorded, and nothing in the folder is written. The source is a .pkg file or a game folder.
 InstallResult InstallGame(const std::filesystem::path& source, const GameRoots& roots, const InstallHooks& hooks = {},
                           std::span<const GameBuild> builds = SupportedBuilds());
 InstallResult InstallFromPackage(const std::filesystem::path& package, const GameRoots& roots,

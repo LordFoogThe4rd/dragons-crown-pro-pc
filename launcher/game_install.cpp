@@ -19,10 +19,6 @@
 #include <thread>
 #include <vector>
 
-#ifndef _WIN32
-#include <sys/stat.h>
-#endif
-
 #include "boot_image.h"
 #include "build_diagnostics.h"
 #include "cpk_patch.h"
@@ -74,24 +70,6 @@ bool RenameWithRetry(const fs::path& from, const fs::path& to) {
     return false;
 }
 
-// Hard links need both paths on one volume: the drive on Windows, the device of the nearest existing folder elsewhere.
-bool SameVolume(const fs::path& a, const fs::path& b) {
-#ifdef _WIN32
-    return a.root_name() == b.root_name();
-#else
-    const auto device = [](fs::path path) {
-        std::error_code ec;
-        while (!path.empty() && !fs::exists(path, ec)) {
-            path = path.parent_path();
-        }
-        struct stat info;
-        return !path.empty() && stat(path.c_str(), &info) == 0 ? std::optional<dev_t>(info.st_dev) : std::nullopt;
-    };
-    const auto first = device(a), second = device(b);
-    return first && second && *first == *second;
-#endif
-}
-
 // An existing folder is only replaced when it is empty or already holds what the installer writes there.
 bool IsReplaceable(const fs::path& dir, const char* own_file) {
     std::error_code ec;
@@ -121,12 +99,6 @@ struct SourceFile {
     fs::path relative;
     uint64_t size;
 };
-
-// Skipped as scripts/game_view.py skips them: extraction leftovers and an earlier preparation's marker.
-bool IsSkipped(const fs::path& name) {
-    const std::string text = Utf8(name);
-    return text == ".pkg_extracted" || text == kPreparedMarker || (text.size() > 5 && text.ends_with(".part"));
-}
 
 std::string JsonQuote(const std::string& text) {
     std::string out = "\"";
@@ -309,6 +281,19 @@ bool WriteMarker(const fs::path& app0, const fs::path& source, size_t linked, si
     return bool(marker.flush());
 }
 
+// The record of a folder installation: its boot image folder names the game folder it was built from. One line so it is
+// readable by eye and by ReadInPlaceFolder.
+bool WriteInPlaceRecord(const fs::path& image_dir, const fs::path& folder) {
+    std::error_code ec;
+    fs::create_directories(image_dir, ec);
+    if (ec) {
+        return false;
+    }
+    std::ofstream record(image_dir / kInPlaceRecord, std::ios::binary | std::ios::trunc);
+    record << Utf8(folder) << '\n';
+    return bool(record.flush());
+}
+
 InstallResult Activate(const Layout& layout, StagingGuard& app0_guard, StagingGuard* image_guard);
 
 // Builds the boot image from the staged game, checks both and swaps them in. Until the swap the current installation
@@ -335,7 +320,12 @@ InstallResult BuildAndActivate(const Layout& layout, StagingGuard& app0_guard, S
         return Failure(InstallStatus::kCancelled);
     }
     phase("Finishing...");
-    return Activate(layout, app0_guard, &image_guard);
+    InstallResult activated = Activate(layout, app0_guard, &image_guard);
+    // An installation of the port's own replaces any folder the player selected earlier.
+    if (activated.ok()) {
+        ClearInPlaceRecords({layout.app0.parent_path(), layout.image.parent_path()}, builds);
+    }
+    return activated;
 }
 
 // Puts the staged folders in place of the installed ones; without an image the installed image is removed, since it
@@ -768,10 +758,12 @@ InstallResult StageUpdate(const fs::path& base_app0, const fs::path& update_dir,
 InstallResult InstallGame(const fs::path& source, const GameRoots& roots, const InstallHooks& hooks,
                           std::span<const GameBuild> builds) {
     std::error_code ec;
-    InstallResult result = fs::is_directory(source, ec) ? InstallFromFolder(source, roots, hooks, builds)
-                                                        : InstallFromPackage(source, roots, hooks, builds);
+    const bool folder = fs::is_directory(source, ec);
+    InstallResult result = folder ? InstallFromFolder(source, roots, hooks, builds)
+                                  : InstallFromPackage(source, roots, hooks, builds);
     if (result.ok() && result.build && SitesOnlySearched(*result.build)) {
-        result.site_report = DescribeBuildSites(*OpenFolderSource(BuildPaths(roots, *result.build).app0), result.build->label);
+        const fs::path game = folder ? Normal(source) : BuildPaths(roots, *result.build).app0;
+        result.site_report = DescribeBuildSites(*OpenFolderSource(game), result.build->label);
     }
     return result;
 }
@@ -806,6 +798,10 @@ InstallResult InstallFromPackage(const fs::path& package_file, const GameRoots& 
     }
     const GameBuild& build = *identity.build;
     if (std::optional<InstallResult> reused = ReuseInstalledBuild(roots, builds, build, hooks.replace_active)) {
+        // A package asks for an installation of the port's own, so a folder the player selected earlier gives way.
+        if (reused->status == InstallStatus::kActivated || reused->status == InstallStatus::kUpToDate) {
+            ClearInPlaceRecords(roots, builds);
+        }
         return *reused;
     }
     const PackageResult loaded = package.LoadFiles();
@@ -821,6 +817,8 @@ InstallResult InstallFromPackage(const fs::path& package_file, const GameRoots& 
     return InstallBasePackage(source, package, loaded, layout, hooks, builds, build);
 }
 
+// The player's game folder is played where it is: only its boot image is built in the port's image folder, and that
+// image folder records the game folder. Nothing in the game folder is copied, changed or removed.
 InstallResult InstallFromFolder(const fs::path& source_dir, const GameRoots& roots, const InstallHooks& hooks,
                                 std::span<const GameBuild> builds) {
     const auto phase = [&](const char* text) {
@@ -829,88 +827,67 @@ InstallResult InstallFromFolder(const fs::path& source_dir, const GameRoots& roo
         }
     };
     std::error_code ec;
-    const fs::path source = Normal(source_dir);
+    const fs::path folder = Normal(source_dir);
 
     phase("Checking the game folder...");
-    if (!fs::is_regular_file(source / "eboot.bin", ec) || !fs::is_regular_file(source / "sce_sys" / "param.sfo", ec)) {
-        return Failure(InstallStatus::kNotGameFolder, Utf8(source));
+    if (!fs::is_regular_file(folder / "eboot.bin", ec) ||
+        !fs::is_regular_file(folder / "sce_sys" / "param.sfo", ec)) {
+        return Failure(InstallStatus::kNotGameFolder, Utf8(folder));
     }
-    if (OverlapsAnyBuild(source, roots, builds)) {
-        return Failure(InstallStatus::kOverlapping, Utf8(source));
+    if (OverlapsAnyBuild(folder, roots, builds)) {
+        return Failure(InstallStatus::kOverlapping, Utf8(folder));
     }
-    const GameCheck check = CheckGameTree(source, builds);
+    const GameCheck check = CheckGameTree(folder, builds);
     if (check.state != GameFileState::kValid) {
-        return UnsupportedOrFailure(check, source);
+        return UnsupportedOrFailure(check, folder);
     }
     const GameBuild& build = *check.build;
-    if (std::optional<InstallResult> reused = ReuseInstalledBuild(roots, builds, build, hooks.replace_active)) {
-        return *reused;
-    }
     const Layout layout(BuildPaths(roots, build));
-    if (!IsReplaceable(layout.app0, kPreparedMarker) || !IsReplaceable(layout.image, "boot.bin")) {
-        return Failure(InstallStatus::kForeignFolder, Utf8(layout.app0) + " or " + Utf8(layout.image));
+    if (!IsReplaceable(layout.image, "boot.bin")) {
+        return Failure(InstallStatus::kForeignFolder, Utf8(layout.image));
     }
+    if (hooks.progress && !hooks.progress(0, 1)) {
+        return Failure(InstallStatus::kCancelled);
+    }
+    fs::create_directories(layout.image.parent_path(), ec);
+    fs::remove_all(layout.image_stage, ec);
+    if (ec || fs::exists(layout.image_stage, ec)) {
+        return Failure(InstallStatus::kWriteFailed, "cannot clear " + Utf8(layout.image_stage));
+    }
+    StagingGuard image_guard(layout.image_stage);
 
-    std::vector<SourceFile> files;
-    uint64_t total = 0;
-    for (fs::recursive_directory_iterator it(source, ec), end; !ec && it != end; it.increment(ec)) {
-        if (IsSkipped(it->path().filename())) {
-            if (it->is_directory(ec)) {
-                it.disable_recursion_pending();
-            }
-            continue;
+    phase("Preparing the game...");
+    if (const std::string error = BuildBootImage(folder, layout.image_stage); !error.empty()) {
+        return Failure(InstallStatus::kPrepareFailed, error);
+    }
+    if (!WriteInPlaceRecord(layout.image_stage, folder)) {
+        return Failure(InstallStatus::kWriteFailed, "cannot write " + Utf8(layout.image_stage / kInPlaceRecord));
+    }
+    phase("Verifying the installation...");
+    const GameCheck installed = CheckGameFiles({folder, layout.image_stage}, builds);
+    if (installed.state != GameFileState::kValid || installed.build != &build) {
+        return Failure(InstallStatus::kPrepareFailed, installed.detail);
+    }
+    if (hooks.progress && !hooks.progress(1, 1)) {
+        return Failure(InstallStatus::kCancelled);
+    }
+    phase("Finishing...");
+    fs::remove_all(layout.image_backup, ec);
+    const bool had_image = fs::exists(layout.image, ec);
+    if (had_image && !RenameWithRetry(layout.image, layout.image_backup)) {
+        return Failure(InstallStatus::kWriteFailed, "cannot move aside " + Utf8(layout.image));
+    }
+    if (!RenameWithRetry(layout.image_stage, layout.image)) {
+        if (had_image) {
+            RenameWithRetry(layout.image_backup, layout.image);
         }
-        if (it->is_regular_file(ec)) {
-            const uint64_t size = it->file_size(ec);
-            files.push_back({it->path().lexically_relative(source), size});
-            total += size;
-        }
+        return Failure(InstallStatus::kWriteFailed, "cannot activate " + Utf8(layout.image));
     }
-    if (ec) {
-        return Failure(InstallStatus::kReadFailed, "cannot list " + Utf8(source) + ": " + ec.message());
-    }
-
-    // The same drive gets hard links, which need no space.
-    if (InstallResult prepared = PrepareStaging(layout, SameVolume(source, layout.app0) ? 0 : total);
-        !prepared.ok()) {
-        return prepared;
-    }
-    StagingGuard app0_guard(layout.app0_stage), image_guard(layout.image_stage);
-
-    phase("Copying the game files...");
-    CopyContext copy{&hooks, 0, total, false};
-    size_t linked = 0;
-    for (const SourceFile& file : files) {
-        const fs::path from = source / file.relative, to = layout.app0_stage / file.relative;
-        fs::create_directories(to.parent_path(), ec);
-        if (ec) {
-            return Failure(InstallStatus::kWriteFailed, "cannot create " + Utf8(to.parent_path()) + ": " + ec.message());
-        }
-        std::string error;
-        switch (TransferFile(from, to, copy, error)) {
-        case Transfer::kLinked: ++linked; break;
-        case Transfer::kCopied: break;
-        case Transfer::kCancelled: return Failure(InstallStatus::kCancelled);
-        case Transfer::kFailed:
-            return Failure(InstallStatus::kWriteFailed, "cannot copy " + Utf8(file.relative) + " (" + error + ")");
-        }
-        copy.done += file.size;
-        if (hooks.progress && !hooks.progress(copy.done, total)) {
-            return Failure(InstallStatus::kCancelled);
-        }
-    }
-    if (!WriteMarker(layout.app0_stage, source, linked, files.size() - linked, build, "full")) {
-        return Failure(InstallStatus::kWriteFailed, "cannot write the preparation marker");
-    }
-    if (InstallResult activated = BuildAndActivate(layout, app0_guard, image_guard, hooks, builds, build, total);
-        !activated.ok()) {
-        return activated;
-    }
+    image_guard.Release();
+    fs::remove_all(layout.image_backup, ec);
 
     InstallResult result;
-    result.bytes = total;
-    result.files = files.size();
-    result.linked = linked;
+    result.detail = Utf8(folder);
     result.build = &build;
     return result;
 }
@@ -942,7 +919,7 @@ InstallMessage DescribeInstall(InstallStatus status) {
                 Tr("The package could not be read or is damaged. Check the file, then try again.")};
     case InstallStatus::kOverlapping:
         return {Tr("Choose another file"),
-                Tr("Select your game package, not a file inside the port's own game folder.")};
+                Tr("Select your game package or extracted folder, not one inside the port's own game folder.")};
     case InstallStatus::kForeignFolder:
         return {Tr("Could not install the game"),
                 Tr("The port's game folder holds other files. Move them out and try again.")};
