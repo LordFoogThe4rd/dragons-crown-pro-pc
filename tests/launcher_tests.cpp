@@ -5101,6 +5101,14 @@ void TestPageNavigation() {
     CHECK(trg.find("ImGui::BeginChild(\"##page_body\"") == trg.rfind("ImGui::BeginChild(\"##page_body\""));
     CHECK(trg.find("TableSetupColumn(\"label\", ImGuiTableColumnFlags_WidthStretch, 1.0f)") != std::string::npos);
     CHECK(trg.find("TableSetupColumn(nullptr, ImGuiTableColumnFlags_WidthStretch, std::max(width, 1.0f))") != std::string::npos);
+
+    // The Play page offers both sources the installer reads: a .pkg and an already extracted game folder.
+    const std::string launcher = ReadAll(fs::path(DCP_SOURCE_DIR) / "launcher" / "launcher.cpp");
+    CHECK(launcher.find("BrowseAndInstall(false)") != std::string::npos);
+    CHECK(launcher.find("BrowseAndInstall(true)") != std::string::npos);
+    const std::string browser = ReadAll(fs::path(DCP_SOURCE_DIR) / "launcher" / "package_browser.cpp");
+    CHECK(browser.find("void PackageBrowser::OpenForFolder(") != std::string::npos);
+    CHECK(browser.find("return !entry.directory;") != std::string::npos);
 }
 
 // ---- Keyboard bindings ----

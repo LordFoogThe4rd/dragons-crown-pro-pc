@@ -1,5 +1,6 @@
 #include "package_browser.h"
 
+#include <algorithm>
 #include <iterator>
 #include <string>
 #include <system_error>
@@ -14,24 +15,36 @@ namespace dcp {
 namespace {
 
 constexpr char kTitle[] = "Select your Dragon's Crown Pro package (.pkg)";
+constexpr char kFolderTitle[] = "Select the extracted Dragon's Crown Pro folder";
 constexpr char kExtension[] = ".pkg";
 
 } // namespace
 
-void PackageBrowser::Open(const fs::path& program_folder) {
+void PackageBrowser::Open(const fs::path& program_folder) { Show(program_folder, false); }
+
+void PackageBrowser::OpenForFolder(const fs::path& program_folder) { Show(program_folder, true); }
+
+void PackageBrowser::Show(const fs::path& program_folder, bool folder) {
     places_ = StandardPlaces(program_folder);
     std::error_code ec;
     show_all_ = false;
+    folders_only_ = folder;
     active_ = true;
     popup_open_ = false;
-    Go(!folder_.empty() && fs::is_directory(folder_, ec) ? folder_ : StartingFolder(places_, kExtension));
+    Go(!folder_.empty() && fs::is_directory(folder_, ec)
+           ? folder_
+           : StartingFolder(places_, folder ? std::string_view() : std::string_view(kExtension)));
 }
 
 void PackageBrowser::Go(const fs::path& folder) {
     std::error_code ec;
     const fs::path resolved = fs::weakly_canonical(folder, ec);
     folder_ = ec ? folder : resolved;
-    listing_ = ListFolder(folder_, show_all_ ? std::string_view() : std::string_view(kExtension), false);
+    const std::string_view extension = folders_only_ || show_all_ ? std::string_view() : std::string_view(kExtension);
+    listing_ = ListFolder(folder_, extension, false);
+    if (folders_only_) {
+        std::erase_if(listing_.entries, [](const FolderEntry& entry) { return !entry.directory; });
+    }
     focus_list_ = true;
 }
 
@@ -39,7 +52,7 @@ std::optional<fs::path> PackageBrowser::Draw(ImFont* font, float font_size, cons
     if (!active_) {
         return std::nullopt;
     }
-    const char* title = Tr(kTitle);
+    const char* title = Tr(folders_only_ ? kFolderTitle : kTitle);
     if (!popup_open_) {
         ImGui::OpenPopup(title);
         popup_open_ = true;
@@ -80,10 +93,12 @@ std::optional<fs::path> PackageBrowser::Draw(ImFont* font, float font_size, cons
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Checkbox(Tr("Show all files"), &show_all_)) {
+    if (!folders_only_ && ImGui::Checkbox(Tr("Show all files"), &show_all_)) {
         Go(folder_);
     }
-    ImGui::SameLine();
+    if (!folders_only_) {
+        ImGui::SameLine();
+    }
     ImGui::TextDisabled("%s", Utf8(folder_).c_str());
 
     const float footer = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
@@ -104,7 +119,10 @@ std::optional<fs::path> PackageBrowser::Draw(ImFont* font, float font_size, cons
         if (!listing_.readable) {
             ImGui::TextDisabled("%s", Tr("This folder cannot be read."));
         } else if (listing_.entries.empty()) {
-            ImGui::TextDisabled("%s", Tr(show_all_ ? "This folder is empty." : "No .pkg files or folders here."));
+            const char* empty = folders_only_ ? "No folders here."
+                                              : show_all_ ? "This folder is empty."
+                                                         : "No .pkg files or folders here.";
+            ImGui::TextDisabled("%s", Tr(empty));
         }
         const float right_edge = ImGui::GetContentRegionAvail().x;
         if (!parent.empty() && parent != folder_ && ImGui::Selectable(Tr("../  (parent folder)"))) {
@@ -139,8 +157,18 @@ std::optional<fs::path> PackageBrowser::Draw(ImFont* font, float font_size, cons
         keep = false;
     }
     ImGui::SameLine();
-    ImGui::TextDisabled("%s",
-                        Tr("Choose the .pkg file. Controller: D-pad to move, A to choose, B to cancel."));
+    if (folders_only_) {
+        if (ImGui::Button(Tr("Use this folder"))) {
+            picked = folder_;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s",
+                            Tr("Choose the folder that contains eboot.bin. Controller: D-pad to move, A to open, B to "
+                               "cancel."));
+    } else {
+        ImGui::TextDisabled("%s",
+                            Tr("Choose the .pkg file. Controller: D-pad to move, A to choose, B to cancel."));
+    }
 
     if (!enter.empty()) {
         Go(enter);

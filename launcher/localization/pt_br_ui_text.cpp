@@ -90,11 +90,11 @@ Ready to play	Pronto para jogar
 Game files needed	Arquivos do jogo necessários
 Different version of Dragon's Crown Pro	Versão diferente de Dragon's Crown Pro
 Could not read the game files	Não foi possível ler os arquivos do jogo
-Install the game from your own .pkg file.	Instale o jogo a partir do seu próprio arquivo .pkg.
-Install a supported build from your own .pkg file.	Instale uma versão compatível a partir do seu próprio arquivo .pkg.
+Install the game from your own .pkg file or an extracted game folder.	Instale o jogo a partir do seu próprio arquivo .pkg ou de uma pasta de jogo já extraída.
+Install a supported build from your own .pkg file or an extracted game folder.	Instale uma versão compatível a partir do seu próprio arquivo .pkg ou de uma pasta de jogo já extraída.
 Check that the game folder can be read, then install again.	Verifique se a pasta do jogo pode ser lida e instale novamente.
 Game files	Arquivos do jogo
-Select your own legally obtained Dragon's Crown Pro package (.pkg). Supported:\s	Selecione o seu próprio pacote de Dragon's Crown Pro obtido legalmente (.pkg). Compatível com:\s
+Select your own legally obtained Dragon's Crown Pro package (.pkg) or an already extracted game folder. Supported:\s	Selecione o seu próprio pacote de Dragon's Crown Pro obtido legalmente (.pkg) ou uma pasta de jogo já extraída. Compatível com:\s
 . The USA 1.01, Japanese 1.02 and 1.03 and Asia/Hong Kong 1.02 updates are installed over their respective 1.00 base packages. The game is unpacked into the game folder next to the program (about 6 GB). The game itself is not included. Reinstalling keeps your saves and settings.	. As atualizações 1.01 dos EUA, 1.02 e 1.03 do Japão e 1.02 da Ásia/Hong Kong são instaladas sobre os respectivos pacotes base 1.00. O jogo é descompactado na pasta de jogo ao lado do programa (cerca de 6 GB). O jogo em si não está incluído. Reinstalar mantém seus jogos salvos e configurações.
 The game files are not ready: see the Play page.	Os arquivos do jogo não estão prontos: veja a página Jogar.
 Wait for the installation to finish.	Aguarde a instalação terminar.
@@ -104,6 +104,7 @@ Run the Connection test on the Online page before playing online.	Execute o Test
 Connection test required	Teste de Conexão necessário
 Reinstall game...	Reinstalar jogo...
 Install game...	Instalar jogo...
+Install from folder...	Instalar a partir de uma pasta...
 Install the game first	Instale o jogo primeiro
 Could not start the game.\s	Não foi possível iniciar o jogo.\s
 Could not start the game.	Não foi possível iniciar o jogo.
@@ -530,6 +531,10 @@ This folder is empty.	Esta pasta está vazia.
 No .pkg files or folders here.	Nenhum arquivo .pkg ou pasta aqui.
 ../  (parent folder)	../  (pasta superior)
 Choose the .pkg file. Controller: D-pad to move, A to choose, B to cancel.	Escolha o arquivo .pkg. Controle: direcional para mover, A para escolher, B para cancelar.
+Select the extracted Dragon's Crown Pro folder	Selecione a pasta extraída de Dragon's Crown Pro
+Use this folder	Usar esta pasta
+No folders here.	Nenhuma pasta aqui.
+Choose the folder that contains eboot.bin. Controller: D-pad to move, A to open, B to cancel.	Escolha a pasta que contém eboot.bin. Controle: direcional para mover, A para abrir, B para cancelar.
 Program folder	Pasta do programa
 Home	Pasta pessoal
 Downloads	Downloads

@@ -96,7 +96,8 @@ int ScancodeOf(ImGuiKey key) {
     return 0;
 }
 std::string GameFilesHelp() {
-    return Tr("Select your own legally obtained Dragon's Crown Pro package (.pkg). Supported: ") +
+    return Tr("Select your own legally obtained Dragon's Crown Pro package (.pkg) or an already extracted game folder. "
+              "Supported: ") +
            SupportedBuildsText() +
            Tr(". The USA 1.01, Japanese 1.02 and 1.03 and Asia/Hong Kong 1.02 updates are installed over their "
               "respective 1.00 base packages. The game is unpacked into the game folder next to the program (about 6 "
@@ -303,8 +304,9 @@ const char* StatusTitle(GameFileState state) {
 std::string StatusDetail(GameFileState state) {
     switch (state) {
     case GameFileState::kValid: return "";
-    case GameFileState::kMissing: return Tr("Install the game from your own .pkg file.");
-    case GameFileState::kDifferentVersion: return Tr("Install a supported build from your own .pkg file.");
+    case GameFileState::kMissing: return Tr("Install the game from your own .pkg file or an extracted game folder.");
+    case GameFileState::kDifferentVersion:
+        return Tr("Install a supported build from your own .pkg file or an extracted game folder.");
     case GameFileState::kReadError: return Tr("Check that the game folder can be read, then install again.");
     }
     return "";
@@ -834,10 +836,15 @@ private:
         }
         ui.Row("Game files");
         if (!ui.TaskProgress(install_)) {
-            const bool clicked = ready ? ImGui::Button(Tr("Reinstall game..."), ImVec2(-FLT_MIN, 0))
-                                       : ui.AccentButton("Install game...");
-            if (clicked) {
-                BrowseAndInstall();
+            const float width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+            const bool package = ready ? ImGui::Button(Tr("Reinstall game..."), ImVec2(width, 0))
+                                       : ui.AccentButton("Install game...", ImVec2(width, 0));
+            ImGui::SameLine();
+            const bool folder = ImGui::Button(Tr("Install from folder..."), ImVec2(width, 0));
+            if (package) {
+                BrowseAndInstall(false);
+            } else if (folder) {
+                BrowseAndInstall(true);
             }
         }
         ui.EndRows();
@@ -859,8 +866,12 @@ private:
 #endif
     }
 
-    void BrowseAndInstall() {
+    void BrowseAndInstall(bool folder) {
         if (install_.running() || browser_.active() || prompts_.running() || BuildPinned()) {
+            return;
+        }
+        if (folder) {
+            browser_.OpenForFolder(paths_.app0.parent_path().parent_path().parent_path());
             return;
         }
         if (UseBuiltInChooser()) {
